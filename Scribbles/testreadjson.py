@@ -153,8 +153,8 @@ def splitReviews(reviewText):
 	return(reviewList)
 		
 
-searchFile ="C:/Users/Matthew/Desktop/BigData/Project/RateBeer2.json"
-writePath="C:/Users/Matthew/Desktop/BigData/Project/"
+searchFile ="C:/Users/Matthew/Desktop/BeerRip/bigbeercrawl.json"
+writePath="C:/Users/Matthew/Desktop/BeerRip/"
 with open(searchFile, "r") as f:
 	readJson=json.loads(f.read().decode('utf-8'))
 attributeList=[]
@@ -192,7 +192,7 @@ statsDict={}
 AllDict={}
 currentList=[]
 ##Parse to write into one mega File, with each review having all the data, lots of repeats 
-with open("c:/Users/Matthew/Desktop/BigData/Project/AllBeer.csv", "w") as f:
+with open(writePath + "AllBeer.csv", "w") as f:
 	columnNames=['beer_id','beer_name','brewer_name','beer_style','distribution','brewery_location','commercial_desc','RATINGS: ','MEAN (/5)', 'WEIGHTED AVG','EST. CALORIES', 'ABV (%)', 'IBU','SCORE','AROMA (/10)', 'APPEARANCE(/5)','TASTE(/10)','PALATE(/5)','OVERALL(/20)','reviewer_name','review_location','review_date','review_content']
 	for x in range(0,len(columnNames)):
 		name=columnNames[x]
