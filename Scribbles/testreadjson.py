@@ -12,7 +12,7 @@ def statToFloat(stat):
 		stat=""
 	return stat
 	
-def parseReview(reviewText):
+def parseReview(reviewText,userDict,updateDict):
 	##4 AROMA 8/10 APPEARANCE 4/5 TASTE 8/10 PALATE 4/5 OVERALL 16/20 RRistow12 (433) - Lewis Center, Ohio, USA - JUL 11, 2015 Text
 	##text hackery to get the stats
 	if reviewText!="":
@@ -77,13 +77,21 @@ def parseReview(reviewText):
 		else:
 			reviewContent=""
 		##Put these into a structure:
-		statsList.append(reviewerName)
+		if updateDict == True:
+			if reviewerName in userDict:
+				statsList.append(userDict[reviewerName])
+			else:
+				userDict[reviewerName]=len(userDict)+1
+				statsList.append(userDict[reviewerName])
+		else:
+			statsList.append(reviewerName)
+			
 		statsList.append(reviewLocation)
 		statsList.append(reviewDate)
 		statsList.append(reviewContent)
 	else:
 		statsList=["","","","","","","","",""]
-	return(statsList)
+	return(statsList,userDict)
 
 	
 def parseStats(statsText):
@@ -106,6 +114,10 @@ def parseStats(statsText):
 		statsList.append(statsDict[stat])
 	return statsList
 
+def makeUserDict(input):
+	userDict={}
+	return userDict
+	
 def splitReviews(reviewText):
 	if reviewText!="":
 		startSearch=10
@@ -162,19 +174,25 @@ for item in readJson['tiles'][0]['schemas']['ee4601ac-0b84-40fa-b57d-a780c876b01
 	attributeList.append(item['name'])
 
 beers = readJson['tiles'][0]['results'][0]['pages']
+print attributeList
+a=raw_input()
 
 currentCount=0
 beerList=[]
 for beer in beers:
 	currentBeerDict={}
 	currentBeerDict['url']=beer['pageUrl']
-	#print beer['results'][0].keys()
-	#print beer['results'][0]['beer_name'].encode('utf-8')
 	for item in attributeList:
 		try:
 			currentBeerDict[item]=beer['results'][0][item]
 		except KeyError:
-			currentBeerDict[item]=""
+			if item == 'beer_name':
+				tempString = beer['pageUrl']
+				startName = tempString.find("/beer/") + 6
+				endName = tempString.find("/",startName+1)
+				currentBeerDict[item]=tempString[startName:endName]
+			else:
+				currentBeerDict[item]=""
 	currentCount+=1
 	currentBeerDict['beer_id']=currentCount
 	beerList.append(currentBeerDict)
@@ -188,10 +206,17 @@ locationDict={}
 reviewsDict={}
 commercialDescDict={}
 statsDict={}
+usersDict={}
 
 AllDict={}
 currentList=[]
-##Parse to write into one mega File, with each review having all the data, lots of repeats 
+##Parse to write into one mega File, with each review having all the data, lots of repeats
+userDict={}
+
+for beer in beerList:
+	if beer['beer_name']=="":
+		print "before writing big file"
+
 with open(writePath + "AllBeer.csv", "w") as f:
 	columnNames=['beer_id','beer_name','brewer_name','beer_style','distribution','brewery_location','commercial_desc','RATINGS: ','MEAN (/5)', 'WEIGHTED AVG','EST. CALORIES', 'ABV (%)', 'IBU','SCORE','AROMA (/10)', 'APPEARANCE(/5)','TASTE(/10)','PALATE(/5)','OVERALL(/20)','reviewer_name','review_location','review_date','review_content']
 	for x in range(0,len(columnNames)):
@@ -205,6 +230,8 @@ with open(writePath + "AllBeer.csv", "w") as f:
 		currentList=[]
 		currentList.append(str(beer['beer_id']))
 		currentList.append(beer['beer_name'])
+		if beer['beer_name']=="":
+			print "this shouldn't work"
 		if isinstance(beer['brewer_name'], basestring):
 			currentList.append(beer['brewer_name'])
 		else:
@@ -225,7 +252,7 @@ with open(writePath + "AllBeer.csv", "w") as f:
 				else:
 					f.write("%.3f" % item)
 					f.write("\t")
-			parsedReview=parseReview(review)
+			parsedReview,userDict=parseReview(review,userDict,False)
 			for x in range(0,len(parsedReview)):
 				item = parsedReview[x]
 				if isinstance(item, basestring):
@@ -239,7 +266,9 @@ with open(writePath + "AllBeer.csv", "w") as f:
 						f.write("\t")
 			f.write("\n")
 		
-		
+for beer in beerList:
+	if beer['beer_name']=="":
+		print "after writing big file"
 ### columnnames=['beer_id','beer_name','brewer_name','beer_style','distribution','brewery_location','commercial_desc','RATINGS: ','MEAN', 'WEIGHTED AVG','EST. CALORIES', 'ABV', 'SCORE','IBU','AROMA', 'APPEARANCE','TASTE','PALATE','OVERALL','reviewer_name','review_location','review_date','review_content']
 ### recall namedStatsList=['RATINGS: ','MEAN: ', 'WEIGHTED AVG: ','EST. CALORIES: ', 'ABV: ', 'IBU: ']
 ### reviewStatsNames=['AROMA', 'APPEARANCE','TASTE','PALATE','OVERALL','reviewer_name','review_location','review_date','review_content']
@@ -257,10 +286,15 @@ for beer in beerList:
 	except TypeError:
 		locationDict[beer['brewer_name'][0]]=beer['brewery_location']
 		#print beer['beer_name'],beer['brewer_name'], beer['brewery_location']
+	#userDict[beer['beer_id']]=beer['reviewer_name']
 	reviewsDict[beer['beer_id']]=splitReviews(beer['reviews'])
 	commercialDescDict[beer['beer_id']]=beer['commercial_desc'].replace("COMMERCIAL DESCRIPTION ","")
 	statsDict[beer['beer_id']]=parseStats(beer['stats'])
 
+	
+for beer in beerList:
+	if beer['beer_name']=="":
+		print "after converting file"
 ##Get this into a proper database format in separate csv files for each table	
 ###Brewery Table:
 writeFile=writePath+"BreweryTable.csv"
@@ -295,7 +329,10 @@ with open(writeFile, "w") as f:
 	for beer in beerList:
 		f.write(str(beer['beer_id']))
 		f.write(",\"")
-		f.write(beer['beer_name'].encode('utf-8'))
+		#print beer['beer_name'].encode('utf-8')
+		f.write(beer['beer_name'].replace("\"", "\'").encode('utf-8'))
+		if beer['beer_name']=="":
+			print "fucked"
 		f.write("\",")
 		if isinstance(beer['brewer_name'], basestring):
 			f.write("%d" % BreweryIDs[beer['brewer_name']])
@@ -307,20 +344,22 @@ with open(writeFile, "w") as f:
 		f.write("%d" % DistributionIDs[beer['distribution']])
 		f.write(",\"")
 		f.write(beer['commercial_desc'].replace("COMMERCIAL DESCRIPTION ","").replace("\"","\'").encode('utf-8'))
-		f.write("\",\"")
+		f.write("\",")
 		##namedStatsList=['RATINGS: ','MEAN: ', 'WEIGHTED AVG: ','EST. CALORIES: ', 'ABV: ', 'IBU: ']
 		statString=""
+		statcount = 0
 		for stat in parseStats(beer['stats']):
+			statcount = statcount+1
 			stat = statToFloat(stat)
 			if isinstance(stat, basestring):
 				f.write("\""+stat+"\"")
 			else:
 				f.write("%.3f" % stat)
-			f.write(",")
-		#statString=statString[0:len(statString)-1]
-		#f.write(statString.encode('utf-8'))
+			if statcount != len(parseStats(beer['stats'])):
+				f.write(",")
 		f.write("\n")
 writeFile=writePath+"ReviewTable.csv"
+userDict={}
 reviewCount=0
 with open(writeFile, "w") as f:
 	for beer in reviewsDict:
@@ -328,14 +367,23 @@ with open(writeFile, "w") as f:
 			reviewCount+=1
 			f.write("%d," % reviewCount)
 			f.write("%d," % beer)
-			parsedReview=parseReview(reviewsDict[beer][x])
+			parsedReview,userDict=parseReview(reviewsDict[beer][x],userDict,True)
+			itemCount=0
 			for item in parsedReview:
+				itemCount+=1
 				if isinstance(item,basestring):
-					f.write("\""+item.encode('utf-8').replace("\"","\'")+"\",")
+					f.write("\""+item.encode('utf-8').replace("\"","\'")+"\"")
 				else:
 					f.write("%.3f" % item)
+				if itemCount!=len(parsedReview):
 					f.write(",")
 			f.write("\n")
+			
+writeFile=writePath+"UserTable.csv"
+with open(writeFile, "w") as f:
+	for user in userDict:
+		f.write("%d," % userDict[user])
+		f.write("\""+user.encode('utf-8')+"\"\n")
 			
 #Use this to look at a sample of the file:
 #readJson=json.loads(wholeThing)
